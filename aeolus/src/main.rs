@@ -1,20 +1,17 @@
+mod config;
+
 use anyhow::Context;
 use aya::programs::{Xdp, XdpFlags};
 use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
-use clap::Parser;
-use log::{info, warn, debug};
+use log::{debug, info, warn};
 use tokio::signal;
-
-#[derive(Debug, Parser)]
-struct Opt {
-    #[clap(short, long, default_value = "eth0")]
-    iface: String,
-}
+use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let opt = Opt::parse();
+    let opt = Config::parse();
+    println!("{:?}", opt);
 
     env_logger::init();
 
