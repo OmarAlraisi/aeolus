@@ -4,16 +4,34 @@ use anyhow::Context;
 use aya::programs::{Xdp, XdpFlags};
 use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
-use log::{debug, info, warn};
-use tokio::signal;
 use config::Config;
+use log::{debug, info, warn};
+use std::time::SystemTime;
+use tokio::signal;
+
+fn setup_logger(log_file: &str) -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339_seconds(SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log_file)?)
+        .apply()?;
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = Config::parse();
-    println!("{:?}", opt);
 
-    env_logger::init();
+    setup_logger(&opt.log_file)?;
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -47,9 +65,9 @@ async fn main() -> Result<(), anyhow::Error> {
     program.attach(&opt.iface, XdpFlags::default())
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
-    info!("Waiting for Ctrl-C...");
+    info!("Aeolus running on '{}'!", opt.iface);
     signal::ctrl_c().await?;
-    info!("Exiting...");
+    info!("Shutting down...");
 
     Ok(())
 }

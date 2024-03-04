@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::{fs, io::BufReader, net::Ipv4Addr, process, str::FromStr};
 
 const DEFAULT_LOG_FILE: &str = "/var/log/aeolus.log";
+const DEFAULT_NETWORK_INTERFACE: &str = "wlp1s0";
 
 struct ConfigError {
     description: String,
@@ -32,7 +33,7 @@ struct Options {
     ports: Option<Vec<u16>>,
 
     /// Network interface of the virtual IP
-    #[arg(short, long, value_name = "NI", default_value = "wlp1s0")]
+    #[arg(short, long, value_name = "NI", default_value = DEFAULT_NETWORK_INTERFACE)]
     iface: String,
 
     /// Path to log file
@@ -54,10 +55,10 @@ impl Options {
 
             match Options::parse_config_file(config_file) {
                 Ok(file_config) => Ok(Config {
-                    ports: file_config.ports,
+                    ports: file_config.ports.unwrap_or(vec![80]),
                     servers: file_config.servers,
                     log_file: file_config.log_file.unwrap_or(DEFAULT_LOG_FILE.to_string()),
-                    iface: file_config.iface,
+                    iface: file_config.iface.unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string()),
                 }),
                 Err(e) => Err(e),
             }
@@ -112,10 +113,10 @@ impl Options {
 
 #[derive(Deserialize)]
 struct FileConfig {
-    ports: Vec<u16>,
+    ports: Option<Vec<u16>>,
     servers: Vec<Ipv4Addr>,
     log_file: Option<String>,
-    iface: String,
+    iface: Option<String>,
 }
 
 #[derive(Debug)]
