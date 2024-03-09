@@ -6,15 +6,15 @@ This is a proof-of-concept (PoC) implementation of Unimog.
 
 ## Description:
 
-**<u>Note:</u>** Since this is a PoC, to make it simpler, Aeolus follows a slightly different approach to transfer packets between servers than Unimog.
+**<u>Note:</u>** Since this is a PoC, to make it simpler, Aeolus follows a slightly different approach to transfer packets between servers compared to Unimog.
 
 ### Setup consideration:
 
-For the purpose of testing Aeolus I created two Linux virtual machines(VM), and manually added the same IP address to each of these VMs. And in addition to that IP, each server has a unique IP that will be used for health check.
+For the purpose of testing Aeolus I created two Linux virtual machines(VM), and manually added the same IP address to each of them. And in addition to that IP, each server has a unique IP that will be used for health check.
 
 ### Transfering packets between servers:
 
-Since all servers share the same IP, I opted to transfer packets between servers by modifying the MAC address of the packet rather than encapsulating the packet with the generic UDP encapsulation method.
+Since all servers share the same IP, I opted to transfer packets between servers by modifying the MAC address of the packet rather than encapsulating it with the generic UDP encapsulation method.
 
 ## Usage:
 
@@ -30,10 +30,10 @@ Options:
 
 #### Options:
 
-ports: A list of u16 values. (Optional - Defaults to `[80]`)
-servers: A list of dictinaries with `ip_address` and 'mac_address' keys.
-logfile: Path to the log file. (Optional - Defaults to `/var/log/aeolus.log`)
-iface: The name of the interface to attach the xdp app to. (Optional - Defaults to `wlp1s0`)
+- `servers`: A list of dictionaries with `ip` and `mac` keys.
+- `ports`: A list of u16 values. (Optional - Defaults to `[80]`)
+- `logfile`: Path to the log file. (Optional - Defaults to `/var/log/aeolus.log`)
+- `iface`: The name of the interface to attach the xdp app to. (Optional - Defaults to `wlp1s0`)
 
 #### Sample aeolus.yaml file:
 ```YAML
@@ -44,7 +44,6 @@ servers:
   - mac: 52:54:00:61:be:9e
     ip: 192.168.122.72
 
-
 ports: 
   - 80
   - 443
@@ -52,3 +51,4 @@ ports:
 logfile: ./aeolus.log
 iface: enp3s0
 ```
+<h6>The file configures Aeolus to only balance ports <i>80</i> and <i>443</i> between two servers, logs everything in <i>./aeolus.log</i>, and attaches the xdp application to interface <i>enp3s0</i>.</h6>
