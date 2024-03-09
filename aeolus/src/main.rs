@@ -1,8 +1,12 @@
 mod config;
 
 use anyhow::Context;
-use aya::programs::{Xdp, XdpFlags};
-use aya::{include_bytes_aligned, Bpf};
+use aya::{
+    include_bytes_aligned,
+    maps::HashMap,
+    programs::{Xdp, XdpFlags},
+    Bpf,
+};
 use aya_log::BpfLogger;
 use config::Config;
 use log::{debug, info, warn};
@@ -64,6 +68,12 @@ async fn main() -> Result<(), anyhow::Error> {
     program.load()?;
     program.attach(&opt.iface, XdpFlags::default())
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
+
+    let mut listeninig_ports: HashMap<_, u16, u16> = HashMap::try_from(bpf.map_mut("LISTENING_PORTS").unwrap())?;
+
+    for port in opt.ports.iter() {
+        listeninig_ports.insert(port, port, 0)?;
+    }
 
     info!("Aeolus running on '{}'!", opt.iface);
     signal::ctrl_c().await?;

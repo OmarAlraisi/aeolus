@@ -1,13 +1,19 @@
 #![no_std]
 #![no_main]
 
-use aya_bpf::{bindings::xdp_action, macros::xdp, programs::XdpContext};
+use aya_bpf::{
+    bindings::xdp_action,
+    macros::{map, xdp},
+    maps::HashMap,
+    programs::XdpContext,
+};
 use aya_log_ebpf::info;
 use core::mem;
 use network_types::{
     eth::{EthHdr, EtherType},
     ip::{IpProto, Ipv4Hdr},
-    tcp::TcpHdr, udp::UdpHdr,
+    tcp::TcpHdr,
+    udp::UdpHdr,
 };
 
 #[xdp]
@@ -18,6 +24,10 @@ pub fn aeolus(ctx: XdpContext) -> u32 {
     }
 }
 
+#[map]
+static LISTENING_PORTS: HashMap<u16, u16> = HashMap::with_max_entries(512, 0);
+
+#[inline(always)]
 fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
     let start = ctx.data();
     let end = ctx.data_end();
@@ -30,8 +40,13 @@ fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
     }
 }
 
+#[inline(always)]
 fn ptr_at_mut<T>(ctx: &XdpContext, offset: usize) -> Result<*mut T, ()> {
     Ok((ptr_at::<T>(ctx, offset)?) as *mut T)
+}
+
+fn is_listening_port(port: u16) -> bool {
+    unsafe { LISTENING_PORTS.get(&port).is_some() }
 }
 
 fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
@@ -45,7 +60,7 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
 
     let iphdr: *const Ipv4Hdr = ptr_at(&ctx, offset)?;
     offset += Ipv4Hdr::LEN;
-    
+
     let src_ip = u32::from_be(unsafe { *iphdr }.src_addr);
     let dst_ip = u32::from_be(unsafe { *iphdr }.dst_addr);
 
@@ -66,7 +81,7 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
     };
 
     // Check if port should be balanced
-    if dst_port != 3000 {
+    if !is_listening_port(dst_port) {
         return Ok(xdp_action::XDP_PASS);
     }
 
@@ -79,7 +94,15 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
     }
 
     let mac = unsafe { *ethhdr }.dst_addr;
-    info!(&ctx, "SRC: {:i}:{}, DST: {:i}:{} ---> redirecting to MAC: {:mac}", src_ip, src_port, dst_ip, dst_port, mac);
+    info!(
+        &ctx,
+        "SRC: {:i}:{}, DST: {:i}:{} ---> redirecting to MAC: {:mac}",
+        src_ip,
+        src_port,
+        dst_ip,
+        dst_port,
+        mac
+    );
     Ok(xdp_action::XDP_TX)
 }
 
