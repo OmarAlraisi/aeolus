@@ -1,7 +1,0 @@
-ports: 
-  - 80
-  - 443
-servers:
-  - 52:54:00:94:df:40
-  - 52:54:00:61:be:9e
-logfile: ./aeolus.log

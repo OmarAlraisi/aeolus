@@ -1,0 +1,14 @@
+servers:
+  - mac: 52:54:00:94:df:40
+    ip: 192.168.122.246
+
+  - mac: 52:54:00:61:be:9e
+    ip: 192.168.122.72
+
+
+ports: 
+  - 80
+  - 443
+
+logfile: ./aeolus.log
+iface: wlp1s0

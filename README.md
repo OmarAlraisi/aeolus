@@ -8,13 +8,13 @@ This is a proof-of-concept (PoC) implementation of Unimog.
 
 **<u>Note:</u>** Since this is a PoC, to make it simpler, Aeolus follows a slightly different approach to transfer packets between servers than Unimog.
 
-### Setup:
+### Setup consideration:
 
-For the purpose of testing Aeolus I created two Linux virtual machines(VM), and manually added the same IP address to each of these VMs.
+For the purpose of testing Aeolus I created two Linux virtual machines(VM), and manually added the same IP address to each of these VMs. And in addition to that IP, each server has a unique IP that will be used for health check.
 
 ### Transfering packets between servers:
 
-Since all servers share the same IP, I opted to transfer packets between servers by modifying the MAC address of the packet rather than encapsulating the packet with the generic UDP encapsulation method. Therefore, unlike Unimog, Aeolus takes MAC addresses to configure the load balancer rather than direct IP addresses.
+Since all servers share the same IP, I opted to transfer packets between servers by modifying the MAC address of the packet rather than encapsulating the packet with the generic UDP encapsulation method.
 
 ## Usage:
 
@@ -22,25 +22,33 @@ Since all servers share the same IP, I opted to transfer packets between servers
 Usage: aeolus [OPTIONS]
 
 Options:
-  -s, --servers <MAC>             Comma separated servers' MAC addresses
-  -p, --ports <PORT>              Comma separated ports [default: 80]
-  -i, --iface <NI>                Netowrk interface to attach eBPF app to [default: wlp1s0]
-      --logfile <FILE>            Path to log file [default: /var/log/aeolus.log]
-      --config <FILE>             Path to Aeolus configuration file
-  -h, --help                      Print help
+      --config <FILE>   Path to Aeolus configuration file [default: aeolus.yaml]
+  -h, --help            Print help
 ```
 
-**<u>Note:</u>** Conflicting configurations will cause an error. (i.e. cannot specify `-s`, `-p`, or `--logfile` while also specifying `--config`).
+### Configuration File:
 
-**<u>Sample Configuration File:</u>**
+#### Options:
 
+ports: A list of u16 values. (Optional - Defaults to `[80]`)
+servers: A list of dictinaries with `ip_address` and 'mac_address' keys.
+logfile: Path to the log file. (Optional - Defaults to `/var/log/aeolus.log`)
+iface: The name of the interface to attach the xdp app to. (Optional - Defaults to `wlp1s0`)
+
+#### Sample aeolus.yaml file:
 ```YAML
+servers:
+  - mac: 52:54:00:94:df:40
+    ip: 192.168.122.246
+
+  - mac: 52:54:00:61:be:9e
+    ip: 192.168.122.72
+
+
 ports: 
   - 80
   - 443
-servers:
-  - 00:00:00:00:00:00
-  - 00:00:00:00:00:01
+
 logfile: ./aeolus.log
 iface: enp3s0
 ```

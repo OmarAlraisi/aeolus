@@ -1,12 +1,15 @@
+use aeolus_common::Server;
 use clap::Parser;
 use mac_address::mac_address_by_name;
 use serde::Deserialize;
-use std::{fs, io::BufReader, process, u8};
+use std::{error, fmt::Display, fs, io::BufReader, net::Ipv4Addr};
 
 const DEFAULT_LOG_FILE: &str = "/var/log/aeolus.log";
 const DEFAULT_NETWORK_INTERFACE: &str = "wlp1s0";
+const DEFAULT_CONFIG_FILE: &str = "aeolus.yaml";
 
-struct ConfigError {
+#[derive(Debug)]
+pub struct ConfigError {
     description: String,
 }
 
@@ -16,102 +19,70 @@ impl ConfigError {
             description: description.to_string(),
         }
     }
+}
 
-    fn exit(&self) -> ! {
-        eprintln!("ERR: {}", self.description);
-        process::exit(1);
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.description)
     }
 }
 
-fn mac_str_to_bytes(servers: Vec<String>) -> Result<Vec<[u8; 6]>, ConfigError> {
-    let mac_err = Err(ConfigError::new("Invalid MAC address."));
-    let mut mac_addresses: Vec<[u8; 6]> = Vec::new();
-    for mac_str in servers {
-        let pairs: Vec<&str> = mac_str.split(':').collect();
-
-        if pairs.len() != 6 {
-            return mac_err;
-        }
-
-        let mut bytes = [0; 6];
-        for (idx, pair) in pairs.iter().enumerate() {
-            match u8::from_str_radix(pair, 16) {
-                Ok(pair_byte) => {
-                    bytes[idx] = pair_byte;
-                }
-                Err(_) => return mac_err,
-            };
-        }
-
-        mac_addresses.push(bytes);
+impl error::Error for ConfigError {
+    fn description(&self) -> &str {
+        &self.description
     }
-    Ok(mac_addresses)
 }
 
 #[derive(Parser, Debug)]
-struct Options {
-    /// Comma Seperated servers' MAC addresses
-    #[arg(short, long, value_delimiter = ',', value_name = "MAC")]
-    servers: Option<Vec<String>>,
-
-    /// Comma Seperated ports [default: 80]
-    #[arg(short, long, value_delimiter = ',', value_name = "PORT")]
-    ports: Option<Vec<u16>>,
-
-    /// Network interface to attach eBPF app to
-    #[arg(short, long, value_name = "NI", default_value = DEFAULT_NETWORK_INTERFACE)]
-    iface: String,
-
-    /// Path to log file
-    #[arg(long = "logfile", value_name = "FILE", default_value = DEFAULT_LOG_FILE)]
-    log_file: String,
-
+struct CLIArgs {
     /// Path to Aeolus configuration file
-    #[arg(long, value_name = "FILE")]
-    config: Option<String>,
+    #[arg(long, value_name = "FILE", default_value_t = DEFAULT_CONFIG_FILE.to_string())]
+    config: String,
 }
 
-impl Options {
-    fn validate(&self) -> Result<Config, ConfigError> {
-        if let Some(config_file) = &self.config {
-            if self.servers.is_some() || self.ports.is_some() || &self.log_file != DEFAULT_LOG_FILE
-            {
-                return Err(ConfigError::new("cannot specify 'servers', 'ports', or 'logfile' when providing a 'config' file."));
-            }
+#[derive(Deserialize)]
+struct FileConfig {
+    ports: Option<Vec<u16>>,
+    servers: Vec<ServerSerializer>,
+    logfile: Option<String>,
+    iface: Option<String>,
+}
 
-            match Options::parse_config_file(config_file) {
-                Ok(file_config) => {
-                    let servers = mac_str_to_bytes(file_config.servers.clone())?;
-                    let iface = file_config
-                        .iface
-                        .unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string());
-                    let host_mac_address = get_host_mac_address(&iface);
-                    Ok(Config {
-                        ports: file_config.ports.unwrap_or(vec![80]),
-                        servers,
-                        log_file: file_config.log_file.unwrap_or(DEFAULT_LOG_FILE.to_string()),
-                        iface,
-                        host_mac_address,
-                    })
-                }
-                Err(e) => Err(e),
-            }
-        } else {
-            if self.servers.is_none() {
-                return Err(ConfigError::new(
-                    "must specify 'servers' or provide a 'config' file.",
-                ));
-            }
+#[derive(Deserialize, Clone)]
+struct ServerSerializer {
+    mac: String,
+    ip: Ipv4Addr,
+}
 
-            let servers = mac_str_to_bytes(self.servers.clone().unwrap())?;
-            Ok(Config {
-                ports: self.ports.clone().unwrap_or(vec![80]),
-                servers,
-                log_file: self.log_file.clone(),
-                iface: self.iface.clone(),
-                host_mac_address: get_host_mac_address(&self.iface),
-            })
-        }
+#[derive(Debug)]
+pub struct Config {
+    pub ports: Vec<u16>,
+    pub servers: Vec<Server>,
+    pub log_file: String,
+    pub iface: String,
+    pub host_mac_address: [u8; 6],
+}
+
+impl Config {
+    pub fn parse() -> Result<Self, ConfigError> {
+        let cli_args = CLIArgs::parse();
+        let file_config = Config::parse_config_file(&cli_args.config)?;
+
+        let servers = map_servers(file_config.servers.clone())?;
+        let iface = file_config
+            .iface
+            .unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string());
+        let host_mac_address = get_host_mac_address(&iface)?;
+
+        println!("{:?}", file_config.logfile);
+
+        Ok(Config {
+            ports: file_config.ports.unwrap_or(vec![80]),
+            servers,
+            log_file: file_config.logfile.unwrap_or(DEFAULT_LOG_FILE.to_string()),
+            iface,
+            host_mac_address,
+        })
     }
 
     fn parse_config_file(config_file: &str) -> Result<FileConfig, ConfigError> {
@@ -120,57 +91,38 @@ impl Options {
             return Err(ConfigError::new("configuration file must be a YAML file."));
         }
 
-        let file = match fs::File::open(config_file) {
-            Ok(file) => file,
-            Err(e) => {
-                return Err(ConfigError::new(e.to_string().as_str()));
-            }
-        };
+        let file =
+            fs::File::open(config_file).map_err(|e| ConfigError::new(e.to_string().as_str()))?;
         let reader = BufReader::new(file);
-        let content: Result<FileConfig, ConfigError> = match serde_yaml::from_reader(reader) {
-            Ok(content) => Ok(content),
-            Err(e) => Err(ConfigError::new(e.to_string().as_str())),
-        };
-        content
+        let content: FileConfig = serde_yaml::from_reader(reader)
+            .map_err(|e| ConfigError::new(e.to_string().as_str()))?;
+        Ok(content)
     }
 }
 
-fn get_host_mac_address(iface: &str) -> [u8; 6] {
-    let host_mac_address = mac_address_by_name(iface)
-        .unwrap_or_else(|_| {
-            ConfigError::new("Couldn't retrieve a MAC address.").exit();
-        })
-        .unwrap_or_else(|| {
-            ConfigError::new("Interface does not have a MAC address.").exit();
-        })
-        .bytes();
+fn map_servers(raw_servers: Vec<ServerSerializer>) -> Result<Vec<Server>, ConfigError> {
+    let mut servers: Vec<Server> = Vec::new();
 
-    host_mac_address
-}
-
-#[derive(Deserialize)]
-struct FileConfig {
-    ports: Option<Vec<u16>>,
-    servers: Vec<String>,
-    log_file: Option<String>,
-    iface: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct Config {
-    pub ports: Vec<u16>,
-    pub servers: Vec<[u8; 6]>,
-    pub log_file: String,
-    pub iface: String,
-    pub host_mac_address: [u8; 6],
-}
-
-impl Config {
-    pub fn parse() -> Self {
-        let options = Options::parse();
-        match options.validate() {
-            Ok(config) => config,
-            Err(e) => e.exit(),
+    for server in raw_servers {
+        let pairs: Vec<&str> = server.mac.split(':').collect();
+        if pairs.len() != 6 {
+            return Err(ConfigError::new("Invalid MAC address."));
         }
+
+        let mut bytes = [0; 6];
+        for (idx, pair) in pairs.iter().enumerate() {
+            bytes[idx] = u8::from_str_radix(pair, 16)
+                .map_err(|_| ConfigError::new("Invalid MAC address."))?;
+        }
+
+        servers.push(Server::new(bytes, server.ip.into()));
+    }
+    Ok(servers)
+}
+
+fn get_host_mac_address(iface: &str) -> Result<[u8; 6], ConfigError> {
+    match mac_address_by_name(iface).map_err(|e| ConfigError::new(e.to_string().as_str()))? {
+        Some(mac_address) => Ok(mac_address.bytes()),
+        None => Err(ConfigError::new("Interface does not have a MAC address.")),
     }
 }

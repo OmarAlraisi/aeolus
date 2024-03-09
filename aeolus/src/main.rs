@@ -33,7 +33,8 @@ fn setup_logger(log_file: &str) -> Result<(), fern::InitError> {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let opt = Config::parse();
+    let opt = Config::parse()?;
+    println!("{:?}", opt);
 
     setup_logger(&opt.log_file)?;
 
@@ -69,15 +70,19 @@ async fn main() -> Result<(), anyhow::Error> {
     program.attach(&opt.iface, XdpFlags::default())
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
-    let mut listeninig_ports: HashMap<_, u16, u16> = HashMap::try_from(bpf.map_mut("LISTENING_PORTS").unwrap())?;
+    let mut listeninig_ports: HashMap<_, u16, u16> =
+        HashMap::try_from(bpf.map_mut("LISTENING_PORTS").unwrap())?;
     for port in opt.ports.iter() {
         listeninig_ports.insert(port, port, 0)?;
     }
 
     let mut servers: Array<_, [u8; 6]> = Array::try_from(bpf.map_mut("SERVERS").unwrap())?;
     for (idx, server_mac) in opt.servers.iter().enumerate() {
-        servers.set(idx as u32, server_mac, 0)?;
+        servers.set(idx as u32, server_mac.get_mac_address(), 0)?;
     }
+
+    // TODO: Add the direct IP addresses of the servers to the config file and use it for haelth
+    // check.
 
     info!("Aeolus running on '{}'!", opt.iface);
     signal::ctrl_c().await?;

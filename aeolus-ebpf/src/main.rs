@@ -92,10 +92,11 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
 
     // TODO: calculate 4-tuple hash
     // TODO: Get MAC address of the appropriate server
+    let dst_mac = [0x52, 0x54, 0x00, 0x94, 0xdf, 0x40];
 
     // Modify destination MAC address
     unsafe {
-        (*ethhdr).dst_addr = [0x52, 0x54, 0x00, 0x94, 0xdf, 0x40];
+        (*ethhdr).dst_addr = dst_mac;
     }
 
     let mac = unsafe { *ethhdr }.dst_addr;
