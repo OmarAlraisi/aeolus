@@ -17,6 +17,7 @@ log = "0.4"
 fern = "0.6"
 humantime = "2.1.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "net", "signal"] }
+mac_address = "1.1.5"
 
 [[bin]]
 name = "aeolus"

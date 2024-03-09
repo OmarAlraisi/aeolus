@@ -1,4 +1,5 @@
 use clap::Parser;
+use mac_address::mac_address_by_name;
 use serde::Deserialize;
 use std::{fs, io::BufReader, process, u8};
 
@@ -81,13 +82,16 @@ impl Options {
             match Options::parse_config_file(config_file) {
                 Ok(file_config) => {
                     let servers = mac_str_to_bytes(file_config.servers.clone())?;
+                    let iface = file_config
+                        .iface
+                        .unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string());
+                    let host_mac_address = get_host_mac_address(&iface);
                     Ok(Config {
                         ports: file_config.ports.unwrap_or(vec![80]),
                         servers,
                         log_file: file_config.log_file.unwrap_or(DEFAULT_LOG_FILE.to_string()),
-                        iface: file_config
-                            .iface
-                            .unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string()),
+                        iface,
+                        host_mac_address,
                     })
                 }
                 Err(e) => Err(e),
@@ -105,6 +109,7 @@ impl Options {
                 servers,
                 log_file: self.log_file.clone(),
                 iface: self.iface.clone(),
+                host_mac_address: get_host_mac_address(&self.iface),
             })
         }
     }
@@ -130,6 +135,19 @@ impl Options {
     }
 }
 
+fn get_host_mac_address(iface: &str) -> [u8; 6] {
+    let host_mac_address = mac_address_by_name(iface)
+        .unwrap_or_else(|_| {
+            ConfigError::new("Couldn't retrieve a MAC address.").exit();
+        })
+        .unwrap_or_else(|| {
+            ConfigError::new("Interface does not have a MAC address.").exit();
+        })
+        .bytes();
+
+    host_mac_address
+}
+
 #[derive(Deserialize)]
 struct FileConfig {
     ports: Option<Vec<u16>>,
@@ -144,6 +162,7 @@ pub struct Config {
     pub servers: Vec<[u8; 6]>,
     pub log_file: String,
     pub iface: String,
+    pub host_mac_address: [u8; 6],
 }
 
 impl Config {
