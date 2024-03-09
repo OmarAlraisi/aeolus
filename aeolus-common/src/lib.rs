@@ -1,12 +1,12 @@
 #![no_std]
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ServerState {
     Healthy,
     Unhealthy,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Server {
     mac_address: [u8; 6],
     ip_address: u32,
@@ -43,4 +43,11 @@ impl Server {
             ServerState::Unhealthy => self.state = ServerState::Healthy,
         }
     }
+}
+
+#[cfg(feature = "user")]
+mod user {
+    use super::*;
+
+    unsafe impl aya::Pod for Server {}
 }

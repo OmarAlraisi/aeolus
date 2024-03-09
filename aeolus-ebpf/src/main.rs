@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use aeolus_common::Server;
 use aya_bpf::{
     bindings::xdp_action,
     macros::{map, xdp},
@@ -30,7 +31,26 @@ static LISTENING_PORTS: HashMap<u16, u16> = HashMap::with_max_entries(512, 0);
 
 // ~1MB (1020 Bytes)
 #[map]
-static SERVERS: Array<[u8; 6]> = Array::with_max_entries(170, 0);
+static SERVERS: Array<Server> = Array::with_max_entries(170, 0);
+
+#[map]
+static SERVERS_COUNT: Array<u8> = Array::with_max_entries(1, 0);
+
+#[inline(always)]
+fn get_destination_mac(src_ip: u32, dst_ip: u32, src_port: u16, dst_port: u16) -> [u8; 6] {
+    if let Some(servers_cnt) = SERVERS_COUNT.get(0) {
+        let servers_cnt = *servers_cnt as u32;
+        let hash_key = (src_ip + dst_ip + (src_port + dst_port) as u32) % servers_cnt;
+
+        if let Some(server) = SERVERS.get(hash_key) {
+            server.get_mac_address()
+        } else {
+            [0; 6]
+        }
+    } else {
+        [0; 6]
+    }
+}
 
 #[inline(always)]
 fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
@@ -90,25 +110,15 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
         return Ok(xdp_action::XDP_PASS);
     }
 
-    // TODO: calculate 4-tuple hash
-    // TODO: Get MAC address of the appropriate server
-    let dst_mac = [0x52, 0x54, 0x00, 0x94, 0xdf, 0x40];
+    // Get destination Mac
+    let dst_mac = get_destination_mac(src_ip, dst_ip, src_port, dst_port);
+    info!(&ctx, "Destination MAC address: {:mac}", dst_mac);
 
     // Modify destination MAC address
     unsafe {
         (*ethhdr).dst_addr = dst_mac;
     }
 
-    let mac = unsafe { *ethhdr }.dst_addr;
-    info!(
-        &ctx,
-        "SRC: {:i}:{}, DST: {:i}:{} ---> redirecting to MAC: {:mac}",
-        src_ip,
-        src_port,
-        dst_ip,
-        dst_port,
-        mac
-    );
     Ok(xdp_action::XDP_TX)
 }
 

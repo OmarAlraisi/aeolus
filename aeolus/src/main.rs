@@ -1,5 +1,6 @@
 mod config;
 
+use aeolus_common::Server;
 use anyhow::Context;
 use aya::{
     include_bytes_aligned,
@@ -76,17 +77,19 @@ async fn main() -> Result<(), anyhow::Error> {
         listeninig_ports.insert(port, port, 0)?;
     }
 
-    let mut servers: Array<_, [u8; 6]> = Array::try_from(bpf.map_mut("SERVERS").unwrap())?;
-    for (idx, server_mac) in opt.servers.iter().enumerate() {
-        servers.set(idx as u32, server_mac.get_mac_address(), 0)?;
+    let mut servers: Array<_, Server> = Array::try_from(bpf.map_mut("SERVERS").unwrap())?;
+    for (idx, server) in opt.servers.iter().enumerate() {
+        servers.set(idx as u32, server, 0)?;
     }
 
-    // TODO: Add the direct IP addresses of the servers to the config file and use it for haelth
-    // check.
+    let mut servers_count: Array<_, u8> = Array::try_from(bpf.take_map("SERVERS_COUNT").unwrap())?;
+    servers_count.set(0, opt.servers.len() as u8, 0)?;
 
     info!("Aeolus running on '{}'!", opt.iface);
     signal::ctrl_c().await?;
     info!("Shutting down...");
+
+    // TODO: Add health checks for servers
 
     Ok(())
 }
