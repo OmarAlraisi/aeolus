@@ -3,7 +3,7 @@ mod config;
 use anyhow::Context;
 use aya::{
     include_bytes_aligned,
-    maps::HashMap,
+    maps::{Array, HashMap},
     programs::{Xdp, XdpFlags},
     Bpf,
 };
@@ -70,9 +70,13 @@ async fn main() -> Result<(), anyhow::Error> {
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
     let mut listeninig_ports: HashMap<_, u16, u16> = HashMap::try_from(bpf.map_mut("LISTENING_PORTS").unwrap())?;
-
     for port in opt.ports.iter() {
         listeninig_ports.insert(port, port, 0)?;
+    }
+
+    let mut servers: Array<_, [u8; 6]> = Array::try_from(bpf.map_mut("SERVERS").unwrap())?;
+    for (idx, server_mac) in opt.servers.iter().enumerate() {
+        servers.set(idx as u32, server_mac, 0)?;
     }
 
     info!("Aeolus running on '{}'!", opt.iface);

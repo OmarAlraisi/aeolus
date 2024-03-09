@@ -4,7 +4,7 @@
 use aya_bpf::{
     bindings::xdp_action,
     macros::{map, xdp},
-    maps::HashMap,
+    maps::{Array, HashMap},
     programs::XdpContext,
 };
 use aya_log_ebpf::info;
@@ -24,8 +24,13 @@ pub fn aeolus(ctx: XdpContext) -> u32 {
     }
 }
 
+// 1MB
 #[map]
 static LISTENING_PORTS: HashMap<u16, u16> = HashMap::with_max_entries(512, 0);
+
+// ~1MB (1020 Bytes)
+#[map]
+static SERVERS: Array<[u8; 6]> = Array::with_max_entries(170, 0);
 
 #[inline(always)]
 fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
