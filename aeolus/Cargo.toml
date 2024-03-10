@@ -18,6 +18,10 @@ fern = "0.6"
 humantime = "2.1.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "net", "signal"] }
 mac_address = "1.1.5"
+tokio-icmp-echo = "0.4.1"
+futures = "0.3.30"
+signal-hook = "0.3.14"
+signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 
 [[bin]]
 name = "aeolus"

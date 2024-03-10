@@ -1,44 +1,26 @@
 mod config;
 mod server;
+mod utils;
 
 use anyhow::Context;
 use aya::{
     include_bytes_aligned,
-    maps::{Array, HashMap, MapData},
+    maps::{Array, HashMap},
     programs::{Xdp, XdpFlags},
     Bpf,
 };
 use aya_log::BpfLogger;
 use config::Config;
 use log::{debug, info, warn};
-use server::Server;
-use std::time::SystemTime;
-use tokio::signal;
-
-fn setup_logger(log_file: &str) -> Result<(), fern::InitError> {
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "[{} {} {}] {}",
-                humantime::format_rfc3339_seconds(SystemTime::now()),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Info)
-        .chain(std::io::stdout())
-        .chain(fern::log_file(log_file)?)
-        .apply()?;
-    Ok(())
-}
+use std::sync::{Arc, Mutex};
+use utils::{setup_logger, setup_sigint_handler, start_health_checker};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // Setup Aeolus configurations, logger, and SIGINT handler
     let opt = Config::parse()?;
-    let mut servers = opt.servers.clone();
-
     setup_logger(&opt.log_file)?;
+    setup_sigint_handler().await?;
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -72,6 +54,9 @@ async fn main() -> Result<(), anyhow::Error> {
     program.attach(&opt.iface, XdpFlags::default())
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
+    // Start
+    info!("Aeolus running on '{}'!", opt.iface);
+
     let mut listeninig_ports: HashMap<_, u16, u16> =
         HashMap::try_from(bpf.map_mut("LISTENING_PORTS").unwrap())?;
     for port in opt.ports.iter() {
@@ -83,31 +68,11 @@ async fn main() -> Result<(), anyhow::Error> {
         healthy_servers.set(idx as u32, server.get_mac_address(), 0)?;
     }
 
+    let servers = Arc::new(Mutex::new(opt.servers.clone()));
     let mut servers_count: Array<_, u8> = Array::try_from(bpf.take_map("SERVERS_COUNT").unwrap())?;
-    servers_count.set(0, servers.len() as u8, 0)?;
-    health_checker(&mut servers, healthy_servers, servers_count).await?;
+    servers_count.set(0, servers.lock().unwrap().len() as u8, 0)?;
 
-    info!("Aeolus running on '{}'!", opt.iface);
-    signal::ctrl_c().await?;
-    info!("Shutting down...");
-
-    // TODO: Add health checks for servers
-
-    Ok(())
-}
-
-async fn health_checker(servers: &mut Vec<Server>, mut healthy_servers: Array<MapData, [u8; 6]>, mut servers_cnt: Array<MapData, u8>) -> Result<(), anyhow::Error> {
-    for server in &mut *servers {
-        server.run_health_check().await;
-    }
-
-    let mut idx: u32 = 0;
-    for server in servers {
-        if server.is_healthy() {
-            healthy_servers.set(idx, server.get_mac_address(), 0)?;
-            idx += 1;
-        }
-        servers_cnt.set(0, idx as u8, 0)?;
-    }
+    // Runs health checker
+    start_health_checker(servers.clone(), &mut healthy_servers, &mut servers_count).await?;
     Ok(())
 }
