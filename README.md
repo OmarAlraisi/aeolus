@@ -34,7 +34,7 @@ Options:
 - `ports`: A list of u16 values. [Optional - Defaults to `[80]`]
 - `logfile`: Path to the log file. [Optional - Defaults to `/var/log/aeolus.log`]
 - `iface`: The name of the interface to attach the xdp app to. [Optional - Defaults to `wlp1s0`]
-- `health_period`: A u8 value representing how often should the health checker run. (In seconds) [Optional - Defaults to `10`]
+- `health_interval`: A u8 value representing how often should the health checker run. (In seconds) [Optional - Defaults to `10`]
 
 #### Sample aeolus.yaml file:
 ```YAML
@@ -51,6 +51,6 @@ ports:
 
 logfile: ./aeolus.log
 iface: enp3s0
-health_period: 30
+health_interval: 30
 ```
 <h6>The file configures Aeolus to only balance ports <i>80</i> and <i>443</i> between two servers, logs everything in <i>./aeolus.log</i>, and attaches the xdp application to interface <i>enp3s0</i>.</h6>

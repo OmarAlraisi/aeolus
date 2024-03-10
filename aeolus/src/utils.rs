@@ -47,7 +47,7 @@ pub async fn start_health_checker(
     servers: Arc<Mutex<Vec<Server>>>,
     healthy_servers: &mut Array<MapData, [u8; 6]>,
     servers_cnt: &mut Array<MapData, u8>,
-    health_period: u8,
+    health_interval: u8,
 ) -> Result<(), anyhow::Error> {
     let mut servers = servers.lock().unwrap();
     loop {
@@ -70,6 +70,6 @@ pub async fn start_health_checker(
             servers_cnt.set(0, idx as u8, 0)?;
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(health_period as u64)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(health_interval as u64)).await;
     }
 }

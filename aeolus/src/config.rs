@@ -47,7 +47,7 @@ struct FileConfig {
     servers: Vec<ServerSerializer>,
     logfile: Option<String>,
     iface: Option<String>,
-    health_period: Option<u8>,
+    health_interval: Option<u8>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -62,7 +62,7 @@ pub struct Config {
     pub servers: Vec<Server>,
     pub log_file: String,
     pub iface: String,
-    pub health_period: u8,
+    pub health_interval: u8,
     pub host_mac_address: [u8; 6],
 }
 
@@ -82,7 +82,7 @@ impl Config {
             servers,
             log_file: file_config.logfile.unwrap_or(DEFAULT_LOG_FILE.to_string()),
             iface,
-            health_period: file_config.health_period.unwrap_or(DEFAULT_HEALTH_PERIOD),
+            health_interval: file_config.health_interval.unwrap_or(DEFAULT_HEALTH_PERIOD),
             host_mac_address,
         })
     }
