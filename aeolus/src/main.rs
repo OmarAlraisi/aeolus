@@ -1,16 +1,17 @@
 mod config;
+mod server;
 
-use aeolus_common::Server;
 use anyhow::Context;
 use aya::{
     include_bytes_aligned,
-    maps::{Array, HashMap},
+    maps::{Array, HashMap, MapData},
     programs::{Xdp, XdpFlags},
     Bpf,
 };
 use aya_log::BpfLogger;
 use config::Config;
 use log::{debug, info, warn};
+use server::Server;
 use std::time::SystemTime;
 use tokio::signal;
 
@@ -35,7 +36,7 @@ fn setup_logger(log_file: &str) -> Result<(), fern::InitError> {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = Config::parse()?;
-    println!("{:?}", opt);
+    let mut servers = opt.servers.clone();
 
     setup_logger(&opt.log_file)?;
 
@@ -77,13 +78,14 @@ async fn main() -> Result<(), anyhow::Error> {
         listeninig_ports.insert(port, port, 0)?;
     }
 
-    let mut servers: Array<_, Server> = Array::try_from(bpf.map_mut("SERVERS").unwrap())?;
+    let mut healthy_servers: Array<_, [u8; 6]> = Array::try_from(bpf.take_map("SERVERS").unwrap())?;
     for (idx, server) in opt.servers.iter().enumerate() {
-        servers.set(idx as u32, server, 0)?;
+        healthy_servers.set(idx as u32, server.get_mac_address(), 0)?;
     }
 
     let mut servers_count: Array<_, u8> = Array::try_from(bpf.take_map("SERVERS_COUNT").unwrap())?;
-    servers_count.set(0, opt.servers.len() as u8, 0)?;
+    servers_count.set(0, servers.len() as u8, 0)?;
+    health_checker(&mut servers, healthy_servers, servers_count).await?;
 
     info!("Aeolus running on '{}'!", opt.iface);
     signal::ctrl_c().await?;
@@ -91,5 +93,21 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // TODO: Add health checks for servers
 
+    Ok(())
+}
+
+async fn health_checker(servers: &mut Vec<Server>, mut healthy_servers: Array<MapData, [u8; 6]>, mut servers_cnt: Array<MapData, u8>) -> Result<(), anyhow::Error> {
+    for server in &mut *servers {
+        server.run_health_check().await;
+    }
+
+    let mut idx: u32 = 0;
+    for server in servers {
+        if server.is_healthy() {
+            healthy_servers.set(idx, server.get_mac_address(), 0)?;
+            idx += 1;
+        }
+        servers_cnt.set(0, idx as u8, 0)?;
+    }
     Ok(())
 }

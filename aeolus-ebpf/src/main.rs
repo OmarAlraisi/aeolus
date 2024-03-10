@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use aeolus_common::Server;
 use aya_bpf::{
     bindings::xdp_action,
     macros::{map, xdp},
@@ -31,7 +30,7 @@ static LISTENING_PORTS: HashMap<u16, u16> = HashMap::with_max_entries(512, 0);
 
 // ~1MB (1020 Bytes)
 #[map]
-static SERVERS: Array<Server> = Array::with_max_entries(170, 0);
+static SERVERS: Array<[u8; 6]> = Array::with_max_entries(170, 0);
 
 #[map]
 static SERVERS_COUNT: Array<u8> = Array::with_max_entries(1, 0);
@@ -43,7 +42,7 @@ fn get_destination_mac(src_ip: u32, dst_ip: u32, src_port: u16, dst_port: u16) -
         let hash_key = (src_ip + dst_ip + (src_port + dst_port) as u32) % servers_cnt;
 
         if let Some(server) = SERVERS.get(hash_key) {
-            server.get_mac_address()
+            *server
         } else {
             [0; 6]
         }

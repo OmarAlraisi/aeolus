@@ -1,4 +1,4 @@
-use aeolus_common::Server;
+use super::server::Server;
 use clap::Parser;
 use mac_address::mac_address_by_name;
 use serde::Deserialize;
@@ -73,8 +73,6 @@ impl Config {
             .iface
             .unwrap_or(DEFAULT_NETWORK_INTERFACE.to_string());
         let host_mac_address = get_host_mac_address(&iface)?;
-
-        println!("{:?}", file_config.logfile);
 
         Ok(Config {
             ports: file_config.ports.unwrap_or(vec![80]),
