@@ -73,6 +73,7 @@ async fn main() -> Result<(), anyhow::Error> {
     servers_count.set(0, servers.lock().unwrap().len() as u8, 0)?;
 
     // Runs health checker
-    start_health_checker(servers.clone(), &mut healthy_servers, &mut servers_count).await?;
+    let health_period = opt.health_period;
+    start_health_checker(servers.clone(), &mut healthy_servers, &mut servers_count, health_period).await?;
     Ok(())
 }

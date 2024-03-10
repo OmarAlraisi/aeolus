@@ -12,3 +12,4 @@ ports:
 
 logfile: ./aeolus.log
 iface: wlp1s0
+health_period: 5
