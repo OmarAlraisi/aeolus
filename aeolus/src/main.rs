@@ -72,6 +72,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut servers_count: Array<_, u8> = Array::try_from(bpf.take_map("SERVERS_COUNT").unwrap())?;
     servers_count.set(0, servers.lock().unwrap().len() as u8, 0)?;
 
+    let mut host_mac_address: Array<_, [u8; 6]> = Array::try_from(bpf.take_map("HOST_MAC_ADDRESS").unwrap())?;
+    host_mac_address.set(0, opt.host_mac_address, 0)?;
+
     // Runs health checker
     let health_interval = opt.health_interval;
     start_health_checker(servers.clone(), &mut healthy_servers, &mut servers_count, health_interval).await?;

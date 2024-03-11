@@ -35,6 +35,9 @@ static SERVERS: Array<[u8; 6]> = Array::with_max_entries(170, 0);
 #[map]
 static SERVERS_COUNT: Array<u8> = Array::with_max_entries(1, 0);
 
+#[map]
+static HOST_MAC_ADDRESS: Array<[u8; 6]> = Array::with_max_entries(1, 0);
+
 #[inline(always)]
 fn get_destination_mac(src_ip: u32, dst_ip: u32, src_port: u16, dst_port: u16) -> [u8; 6] {
     if let Some(servers_cnt) = SERVERS_COUNT.get(0) {
@@ -48,6 +51,19 @@ fn get_destination_mac(src_ip: u32, dst_ip: u32, src_port: u16, dst_port: u16) -
         }
     } else {
         [0; 6]
+    }
+}
+
+#[inline(always)]
+fn is_own_address(mac_address: &[u8; 6]) -> bool {
+    if let Some(host_mac_address) = HOST_MAC_ADDRESS.get(0) {
+        if mac_address == host_mac_address {
+            true
+        } else {
+            false
+        }
+    } else {
+        false
     }
 }
 
@@ -111,6 +127,12 @@ fn try_aeolus(ctx: XdpContext) -> Result<u32, ()> {
 
     // Get destination Mac
     let dst_mac = get_destination_mac(src_ip, dst_ip, src_port, dst_port);
+
+    // Chekc if own mac address
+    if is_own_address(&dst_mac) {
+        return Ok(xdp_action::XDP_PASS);
+    }
+
     info!(&ctx, "Destination MAC address: {:mac}", dst_mac);
 
     // Modify destination MAC address
