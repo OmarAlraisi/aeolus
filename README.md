@@ -1,6 +1,6 @@
 # Aeolus
 
-<h6>Ancient Greek: Αἴολος, Aiolos - In Greek mythology, Aeolus the son of Hippotes, was the ruler of the winds.</h6>
+<h6>Ancient Greek: Αἴολος, Aiolos - In Greek mythology, Aeolus was the ruler of the winds.</h6>
 
 This is a proof-of-concept (PoC) implementation of Unimog.
 
