@@ -32,9 +32,11 @@ static LISTENING_PORTS: HashMap<u16, u16> = HashMap::with_max_entries(512, 0);
 #[map]
 static SERVERS: Array<[u8; 6]> = Array::with_max_entries(170, 0);
 
+// 1B - Number of healthy servers
 #[map]
 static SERVERS_COUNT: Array<u8> = Array::with_max_entries(1, 0);
 
+// 8B 
 #[map]
 static HOST_MAC_ADDRESS: Array<[u8; 6]> = Array::with_max_entries(1, 0);
 
