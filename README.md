@@ -10,11 +10,11 @@ This is a proof-of-concept (PoC) implementation of Unimog.
 
 ### Setup consideration:
 
-For the purpose of testing Aeolus I created two Linux virtual machines(VM), and manually added the same IP address to each of them. And in addition to that IP, each server has a unique IP that will be used for health check.
+For the purpose of testing Aeolus and to simplify the architecture, I created two Linux virtual machines, and manually added a matching IP address from within the machines. And in addition to that IP, each machine has its own unique IP which is used for health check. However, this is not a recommended setup because the address resolution protocol (ARP) will make all packets arrive on the same machine before being transfered or consumed, causing a single entry point.
 
 ### Transfering packets between servers:
 
-Since all servers share the same IP, I opted to transfer packets between servers by modifying the MAC address of the packet rather than encapsulating it with the generic UDP encapsulation method.
+Since all servers share the same IP, I opted to transfer packets between servers by modifying the destination MAC address of the packet rather than encapsulating it with the generic UDP encapsulation method.
 
 ## Usage:
 
