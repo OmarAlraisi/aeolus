@@ -7,13 +7,14 @@ use aya::{
     include_bytes_aligned,
     maps::{Array, HashMap},
     programs::{Xdp, XdpFlags},
-    Bpf,
+    Ebpf,
 };
-use aya_log::BpfLogger;
+use aya_log::EbpfLogger;
 use config::Config;
 use log::{debug, info, warn};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use utils::{setup_logger, setup_sigint_handler, start_health_checker};
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -38,14 +39,14 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     #[cfg(debug_assertions)]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+    let mut bpf = Ebpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/aeolus"
     ))?;
     #[cfg(not(debug_assertions))]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+    let mut bpf = Ebpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/aeolus"
     ))?;
-    if let Err(e) = BpfLogger::init(&mut bpf) {
+    if let Err(e) = EbpfLogger::init(&mut bpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
@@ -70,7 +71,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let servers = Arc::new(Mutex::new(opt.servers.clone()));
     let mut servers_count: Array<_, u8> = Array::try_from(bpf.take_map("SERVERS_COUNT").unwrap())?;
-    servers_count.set(0, servers.lock().unwrap().len() as u8, 0)?;
+    servers_count.set(0, servers.lock().await.len() as u8, 0)?;
 
     let mut host_mac_address: Array<_, [u8; 6]> = Array::try_from(bpf.take_map("HOST_MAC_ADDRESS").unwrap())?;
     host_mac_address.set(0, opt.host_mac_address, 0)?;

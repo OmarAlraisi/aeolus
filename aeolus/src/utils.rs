@@ -4,14 +4,11 @@ use futures::StreamExt;
 use log::info;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
-use std::{
-    process,
-    sync::{Arc, Mutex},
-    time::SystemTime,
-};
+use std::{process, sync::Arc, time::SystemTime};
+use tokio::sync::Mutex;
 
 pub async fn setup_sigint_handler() -> Result<(), anyhow::Error> {
-    let mut signals = Signals::new(&[SIGINT])?;
+    let mut signals = Signals::new([SIGINT])?;
     signals.handle();
     tokio::spawn(async move {
         while let Some(signal) = signals.next().await {
@@ -49,7 +46,7 @@ pub async fn start_health_checker(
     servers_cnt: &mut Array<MapData, u8>,
     health_interval: u8,
 ) -> Result<(), anyhow::Error> {
-    let mut servers = servers.lock().unwrap();
+    let mut servers = servers.lock().await;
     loop {
         let mut state_changed = false;
         for server in &mut *servers {
